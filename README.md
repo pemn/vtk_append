@@ -7,3 +7,6 @@ append meshes and textures into a single scene
 ## Supported texture formats
  - png
  - ireg
+## Screenshots
+[screenshot1]![assets/screenshot1.png]
+[screenshot2]![assets/screenshot2.png]
