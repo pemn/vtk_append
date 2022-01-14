@@ -8,5 +8,5 @@ append meshes and textures into a single scene
  - png
  - ireg
 ## Screenshots
-[screenshot1]!(./assets/screenshot1.png?raw=true)  
-[screenshot2]!(./assets/screenshot2.png?raw=true)  
+![screenshot1](./assets/screenshot1.png?raw=true)  
+![screenshot2](./assets/screenshot2.png?raw=true)  
