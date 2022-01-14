@@ -911,7 +911,7 @@ def gltf_to_vtk(gltf):
 
   return meshes
 
-def vtk_grid_to_mesh(grid, array_name = None):
+def vtk_grid_to_mesh(grid, array_name = None, slices = 10):
   ''' grade shells - extract volumes of similar value as a mesh '''
   vtk_array_string_to_index(grid)
   if array_name is None:
@@ -925,10 +925,10 @@ def vtk_grid_to_mesh(grid, array_name = None):
 
   dr = grid.get_data_range(array_name)
   #for r in range(int(dr[0]), int(dr[1] + 1), max(1, (dr[1] - dr[0]) // 99)):
-  for r in np.linspace(dr[0], dr[1], 10):
+  for r in np.linspace(dr[0], dr[1], slices):
     mesh = grid.threshold([r,r], array_name).extract_geometry()
-    #mesh.texture_map_to_plane(inplace=True)
-    meshes.append(mesh)
+    if mesh.n_cells:
+      meshes.append(mesh)
 
   return meshes
 

@@ -32,7 +32,7 @@ import numpy as np
 sys.path.insert(0, os.path.splitext(sys.argv[0])[0] + '.pyz')
 
 from _gui import usage_gui, commalist, log
-from pd_vtk import pv_read, pv_save, vtk_plot_meshes, vtk_path_to_texture, vtk_grid_to_mesh
+from pd_vtk import pv_read, pv_save, vtk_plot_meshes, vtk_path_to_texture, vtk_grid_to_mesh, vtk_ireg_to_texture
 
 def vtk_append(input_meshes, output, display = None):
   meshes = []
