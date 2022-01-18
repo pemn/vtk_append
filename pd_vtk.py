@@ -67,7 +67,7 @@ def pv_read(fp):
     from pygltflib import GLTF2
     gltf = GLTF2.load(fp)
     mesh = gltf_to_vtk(gltf)
-  elif re.search(r'vt(k|p)$', fp, re.IGNORECASE):
+  elif re.search(r'vt(k|p|m)$', fp, re.IGNORECASE):
     mesh = pv.read(fp)
     import skimage.io
     for name in mesh.field_data:
@@ -99,7 +99,7 @@ def pv_save(meshes, fp, binary=True):
   elif re.search(r'gl(b|tf)$', fp, re.IGNORECASE):
     gltf = vtk_to_gltf(meshes)
     gltf.save(fp)
-  elif not re.search(r'vt(k|p)$', fp, re.IGNORECASE):
+  elif not re.search(r'vt(k|p|m)$', fp, re.IGNORECASE):
     df = pd.DataFrame()
     if not isinstance(meshes, list):
       meshes = [meshes]
@@ -316,7 +316,7 @@ def vtk_plot_meshes(meshes, point_labels=False, cmap = None):
   # plt.cm.Paired
   # if pv is None: return
   p = pv.Plotter()
-  p.add_axes()
+  
   if isinstance(cmap, str):
     import matplotlib.cm
     cmap = matplotlib.cm.get_cmap(cmap)
@@ -330,16 +330,21 @@ def vtk_plot_meshes(meshes, point_labels=False, cmap = None):
       color = None
       if cmap is not None:
         color = cmap(i/max(1,len(meshes)-1))
-
       if mesh.GetDataObjectType() in [2,6]:
         p.add_mesh(mesh.slice_orthogonal(), opacity=0.5)
+      elif len(mesh.textures):
+        #print(vtk_texture_to_array(mesh.textures[0]))
+        print(mesh)
+        p.add_mesh(mesh, color=None)
       else:
         p.add_mesh(mesh, opacity=0.5, color=color)
+
       if point_labels:
         p.add_point_labels(mesh.points, np.arange(mesh.n_points))
       c += 1
   if c:
     log("display", c, "meshes")
+    p.add_axes()
     p.show()
 
 def vtk_mesh_to_df(mesh, face_size = None, xyz = ['x','y','z'], n0 = 0):
@@ -569,7 +574,7 @@ class vtk_Voxel_(object):
   @classmethod
   def from_file_path(cls, fp):
     ''' fire and forget parsing for multiple file types '''
-    if not re.search(r'vt(k|m)$', fp, re.IGNORECASE):
+    if not re.search(r'vt(k|p|m)$', fp, re.IGNORECASE):
       from _gui import pd_load_dataframe
       df = pd_load_dataframe(fp)
       return cls.from_df(df, None, pd_detect_xyz(df))
@@ -737,6 +742,10 @@ def vtk_path_to_texture(fp):
   img = skimage.io.imread(fp)
   return pv.Texture(np.flip(img, 0))
 
+def vtk_rgb_to_texture(rgb):
+  from matplotlib.colors import to_rgb
+  img = np.tile(np.multiply(to_rgb(rgb), 255), (8,8,1)).astype(dtype='uint8')
+  return pv.Texture(img)
 
 def ireg_to_json(fp):
   import json

@@ -1,8 +1,10 @@
 #!python
 # append meshes and textures into a single scene
+# texture can be a image, a ireg file or a #RGB color code
+# translate to origin: use to avoid errors when using data with UTM coordinates
 # v1.0 01/2022 paulo.ernesto
 '''
-usage: $0 input_meshes#mesh*obj,vtk,vtp,glb#texture*png,jpg,tiff,ireg output*obj,vtk,glb display@
+usage: $0 input_meshes#mesh*obj,msh,vtk,vtp,vtm,glb#texture*png,jpg,tiff,ireg translate_to_origin@ output*obj,msh,vtk,vtp,vtm,glb display@
 '''
 '''
 Copyright 2022 Vale
@@ -32,9 +34,27 @@ import numpy as np
 sys.path.insert(0, os.path.splitext(sys.argv[0])[0] + '.pyz')
 
 from _gui import usage_gui, commalist, log
-from pd_vtk import pv_read, pv_save, vtk_plot_meshes, vtk_path_to_texture, vtk_grid_to_mesh, vtk_ireg_to_texture
+from pd_vtk import pv_read, pv_save, vtk_plot_meshes, vtk_path_to_texture, vtk_grid_to_mesh, vtk_ireg_to_texture, vtk_rgb_to_texture
 
-def vtk_append(input_meshes, output, display = None):
+def vtk_local_origin(meshes):
+  bounds0 = None
+  bounds1 = None
+  for mesh in meshes:
+    if bounds0 is None:
+      bounds0 = bounds1 = mesh.bounds
+    else:
+      bounds0 = np.min([bounds0, mesh.bounds], 0)
+      bounds1 = np.max([bounds1, mesh.bounds], 0)
+  #bb = np.subtract(bounds1[1::2], bounds0[0::2])
+  bb = np.subtract(bounds0[0::2], bounds1[1::2])
+  tm = np.eye(4)
+  tm[0:3, 3] = bb
+  print(tm)
+  for mesh in meshes:
+    mesh.transform(tm, inplace=True)
+  return meshes
+
+def vtk_append(input_meshes, translate_to_origin = False, output = None, display = None):
   meshes = []
   for fp_m, fp_t in commalist().parse(input_meshes):
     log(fp_m)
@@ -49,8 +69,14 @@ def vtk_append(input_meshes, output, display = None):
       elif fp_t:
         if mesh.active_t_coords is None:
           mesh.texture_map_to_plane(inplace=True)
-        mesh.textures[0] = vtk_path_to_texture(fp_t)
+        if fp_t[0] == '#':
+          mesh.textures[0] = vtk_rgb_to_texture(fp_t)
+        elif os.path.exists(fp_t):
+          mesh.textures[0] = vtk_path_to_texture(fp_t)
       meshes.append(mesh)
+
+  if int(translate_to_origin):
+    meshes = vtk_local_origin(meshes)
 
   if output:
     pv_save(meshes, output)
