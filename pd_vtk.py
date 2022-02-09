@@ -31,12 +31,13 @@ try:
 except:
   # we use this base class in enviroments that dont support VTK
   class pv(object):
+    class StructuredGrid(object):
+      pass
     class UniformGrid(object):
       pass
     def read(*argv):
       pass
     
-
 ''' GetDataObjectType
 PolyData == 0
 VTK_STRUCTURED_GRID = 2
@@ -63,6 +64,10 @@ def pv_read(fp):
     from vulcan_save_tri import vulcan_load_tri
     nodes, faces, cv, cn = vulcan_load_tri(fp)
     mesh = vtk_nf_to_mesh(nodes, faces)
+    # pyvista 0.26.1 and numpy on python 3.5 dont work due to np.flip
+    #if cn == 'rgb':
+    #  mesh.textures[0] = vtk_uint_to_texture(cv)
+
   elif re.search(r'gl(b|tf)$', fp, re.IGNORECASE):
     from pygltflib import GLTF2
     gltf = GLTF2.load(fp)
@@ -70,9 +75,9 @@ def pv_read(fp):
   elif re.search(r'vt(k|p|m)$', fp, re.IGNORECASE):
     mesh = pv.read(fp)
     import skimage.io
-    for name in mesh.field_data:
+    for name in mesh.field_arrays:
       if len(name) == 1:
-        v = mesh.field_data[name]
+        v = mesh.field_arrays[name]
         mesh.textures[int(name)] = pv.Texture(np.reshape(v, (v.shape[0],-1,3)))
 
   else:
@@ -83,7 +88,10 @@ def pv_read(fp):
 
 def pv_save(meshes, fp, binary=True):
   ''' simple import safe pyvista writer '''
-  #if pv is None: return
+  if meshes is None: return
+  if not hasattr(meshes, '__len__'):
+    meshes = [meshes]
+
   if fp.lower().endswith('obj'):
     from _gui import wavefront_save_obj
     od = vtk_meshes_to_obj(meshes)
@@ -162,7 +170,7 @@ def vtk_flat_to_cells(flat, nodes = None):
 def pd_detect_xyz(df, z = True):
   xyz = None
   dfcs = set(df.columns)
-  for s in [['x','y','z'], ['mid_x','mid_y','mid_z'], ['xworld','yworld','zworld'], ['xcentre','ycentre','zcentre'], ['xc','yc','zc']]:
+  for s in [['x','y','z'], ['midx','midy','midz'], ['mid_x','mid_y','mid_z'], ['xworld','yworld','zworld'], ['xcentre','ycentre','zcentre'], ['xc','yc','zc']]:
     if z == False:
       s.pop()
     for c in [str.lower, str.upper,str.capitalize]:
@@ -172,7 +180,7 @@ def pd_detect_xyz(df, z = True):
         break
     else:
       continue
-    # break also the outter loop if the inner loop ended due to a break
+    # break also the outter loop if the inner loop broke
     break
   if xyz is None and z:
     return pd_detect_xyz(df, False)
@@ -275,9 +283,10 @@ def vtk_df_to_mesh(df, xyz = None):
     if k in xyz + ['w','t','n','closed','node']:
       continue
     try:
-      mesh.cell_data[k] = v[pdata.index]
+      mesh.point_data[k] = v[pdata.index]
     except:
       log("invalid column:", k)
+  
   return mesh
 
 # dmbm_to_vtk
@@ -314,6 +323,7 @@ def vtk_plot_meshes(meshes, point_labels=False, cmap = None):
   # plt.cm.gray
   # plt.cm.spectral
   # plt.cm.Paired
+  # plt.cm.tab20
   # if pv is None: return
   p = pv.Plotter()
   
@@ -326,15 +336,16 @@ def vtk_plot_meshes(meshes, point_labels=False, cmap = None):
     meshes = [meshes]
   for i in range(len(meshes)):
     mesh = meshes[i]
-    if mesh is not None:
+    if mesh is not None and mesh.n_points:
+      # fix corner case of error when the plotter cant find a active scalar
+      if len(mesh.array_names) and mesh.active_scalars is None:
+        mesh.set_active_scalars(mesh.array_names[0])
       color = None
       if cmap is not None:
         color = cmap(i/max(1,len(meshes)-1))
       if mesh.GetDataObjectType() in [2,6]:
         p.add_mesh(mesh.slice_orthogonal(), opacity=0.5)
       elif len(mesh.textures):
-        #print(vtk_texture_to_array(mesh.textures[0]))
-        print(mesh)
         p.add_mesh(mesh, color=None)
       else:
         p.add_mesh(mesh, opacity=0.5, color=color)
@@ -373,7 +384,7 @@ def vtk_mesh_to_df(mesh, face_size = None, xyz = ['x','y','z'], n0 = 0):
       points = mesh.cell_centers().points
       arr_n = np.zeros(mesh.n_cells, dtype=np.int_)
       arr_node = np.arange(mesh.n_cells, dtype=np.int_)
-      arr_data = [pd.Series(mesh.get_array(name), name=name) for name in mesh.cell_data]
+      arr_data = [pd.Series(mesh.get_array(name), name=name) for name in mesh.cell_arrays]
     else:
       arr_data = []
       # in some cases, n_faces may be > 0  but with a empty faces array
@@ -502,8 +513,12 @@ class vtk_Voxel_(object):
     return self
 
   @classmethod
-  def from_bb(cls, bb, cell_size = 10, ndim = 3):
+  def from_bb(cls, bb, cell_size = None, ndim = 3):
     dims = np.add(np.ceil(np.divide(np.subtract(bb[1], bb[0]), cell_size)), 2)
+    if not cell_size:
+      cell_size = 10
+    else:
+      cell_size = float(cell_size)
     origin = np.subtract(bb[0], cell_size)
     if ndim == 2:
       dims[2] = 1
@@ -552,7 +567,8 @@ class vtk_Voxel_(object):
     else:
       # find nearest cell using geometry
       # cache arrays. using directly from mesh.cell_data is bugged.
-      points = df.filter(xyz).to_numpy(np.float_)
+      # .to_numpy(np.float_)
+      points = np.asfarray(df.filter(xyz))
       ci = self.find_closest_cell(points)
       
       for v in vl:
@@ -741,6 +757,11 @@ def vtk_path_to_texture(fp):
   import skimage.io
   img = skimage.io.imread(fp)
   return pv.Texture(np.flip(img, 0))
+
+def vtk_uint_to_texture(cv):
+  rgb = [int(cv / 2 ** 16), int((cv % 2 ** 16) / 2**8), cv % 2**8]
+  img = np.tile(np.multiply(rgb, 255), (8,8,1)).astype(dtype='uint8')
+  return pv.Texture(img)
 
 def vtk_rgb_to_texture(rgb):
   from matplotlib.colors import to_rgb
@@ -945,13 +966,31 @@ def vtk_grid_to_mesh(grid, array_name = None, slices = 10):
 def vtk_meshes_to_obj(meshes):
   ' convert a vtk mesh to a wavefront mesh dict '
   od = {"v": [], "f": [], "l": [], "vt": []}
+
   for mesh in meshes:
     od['f'].extend(np.add(len(od['v']), vtk_cells_to_faces(mesh.faces)))
     od['v'].extend(mesh.points)
-    if mesh.active_t_coords is not None:
-      od['vt'].extend(mesh.active_t_coords)
+    if mesh.t_coords is not None:
+      od['vt'].extend(mesh.t_coords)
 
   return od
+
+def vtk_meshes_bb(meshes, buffer = None):
+  bounds0 = None
+  bounds1 = None
+  for mesh in meshes:
+    if bounds0 is None:
+      bounds0 = bounds1 = mesh.bounds
+    else:
+      bounds0 = np.min([bounds0, mesh.bounds], 0)
+      bounds1 = np.max([bounds1, mesh.bounds], 0)
+  bounds0 = bounds0[0::2]
+  bounds1 = bounds1[1::2]
+  if buffer:
+    bounds0 = np.subtract(bounds0, buffer)
+    bounds1 = np.add(bounds1, buffer)
+
+  return np.stack([bounds0, bounds1])
 
 if __name__=="__main__":
   pass

@@ -40,13 +40,13 @@ def pyd_zip_extract():
     return
   platform_arch = '.cp%d%d-win_amd64' % (sys.hexversion >> 24, sys.hexversion >> 16 & 0xFF)
 
-  pyd_path = os.environ['TEMP'] + "/pyz_" + platform_arch
+  pyd_path = os.environ.get('TEMP', '.') + "/pyz_" + platform_arch
 
   if not os.path.isdir(pyd_path):
     os.mkdir(pyd_path)
 
   sys.path.insert(0, pyd_path)
-  os.environ['PATH'] += ';' + pyd_path
+  os.environ['PATH'] = os.environ.get('PATH', '') + ';' + pyd_path
 
   import zipfile
   zip_root = zipfile.ZipFile(zip_path)
@@ -648,18 +648,24 @@ def pd_load_tri(df_path):
   import numpy as np
   import pandas as pd
   tri = vulcan.triangulation(df_path)
+
+  ta = vulcan.tri_attributes(df_path)
+  
+
   cv = tri.get_colour()
   cn = 'colour'
   if vulcan.version_major >= 11 and tri.is_rgb():
     cv = np.sum(np.multiply(tri.get_rgb(), [2**16,2**8,1]))
     cn = 'rgb'
-  print("pd_load_tri nodes",tri.n_nodes(),"faces",tri.n_faces())
+  #print("pd_load_tri nodes",tri.n_nodes(),"faces",tri.n_faces())
   #df = [tri.get_node(int(f[n])) + [0,bool(n),n,1,f[n],cv] for f in tri.get_faces() for n in range(3)], 
   # orphan nodes
-  return nodes_faces_to_df(tri.get_vertices(), tri.get_faces())
+  df =  nodes_faces_to_df(tri.get_vertices(), tri.get_faces())
+  if ta.is_ok():
+    for k,v in ta.get_hash().items():
+      df[k] = v
 
-
-  #return pd.DataFrame(df, columns=smartfilelist.default_columns + ['closed','node',cn])
+  return df
 
 
 def df_to_nodes_faces_simple(df, node_name = 'node', xyz = ['x','y','z']):
@@ -1051,7 +1057,7 @@ def leapfrog_load_mesh(df_path):
       break
   file.close()
 
-  print("%02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x = %.2f %.2f %.2f" % tuple(struct.unpack_from('12B', binary, 0) + struct.unpack_from('3f', binary, 0)))
+  log("%02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x = %.2f %.2f %.2f" % tuple(struct.unpack_from('12B', binary, 0) + struct.unpack_from('3f', binary, 0)))
   # skip unknown 12 byte header
   # maybe on some cases it contains rgb color?
   p = 12
@@ -2184,7 +2190,7 @@ class Branding(object):
   _gc = []
   def __init__(self, f='ICO', size=None, choice=None):
     if choice is None:
-      self._choice = os.environ['USERDOMAIN']
+      self._choice = os.environ.get('USERDOMAIN')
     else:
       self._choice = choice
 

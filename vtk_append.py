@@ -34,19 +34,13 @@ import numpy as np
 sys.path.insert(0, os.path.splitext(sys.argv[0])[0] + '.pyz')
 
 from _gui import usage_gui, commalist, log
-from pd_vtk import pv_read, pv_save, vtk_plot_meshes, vtk_path_to_texture, vtk_grid_to_mesh, vtk_ireg_to_texture, vtk_rgb_to_texture
+from pd_vtk import pv_read, pv_save, vtk_plot_meshes, vtk_path_to_texture, vtk_grid_to_mesh, vtk_ireg_to_texture, vtk_rgb_to_texture, vtk_meshes_bb
 
 def vtk_local_origin(meshes):
-  bounds0 = None
-  bounds1 = None
-  for mesh in meshes:
-    if bounds0 is None:
-      bounds0 = bounds1 = mesh.bounds
-    else:
-      bounds0 = np.min([bounds0, mesh.bounds], 0)
-      bounds1 = np.max([bounds1, mesh.bounds], 0)
+  bounds0, bounds1 = vtk_meshes_bb(meshes)
+
   #bb = np.subtract(bounds1[1::2], bounds0[0::2])
-  bb = np.subtract(bounds0[0::2], bounds1[1::2])
+  bb = np.subtract(bounds0, bounds1)
   tm = np.eye(4)
   tm[0:3, 3] = bb
   print(tm)
