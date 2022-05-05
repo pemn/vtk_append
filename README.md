@@ -1,9 +1,10 @@
 # vtk_append
-append meshes and textures into a single scene
+append meshes and textures into a single scene  
+meshes can have textures already present or a image can be supplied 
 ## Supported mesh formats
  - vtk, vtp
  - obj (wavefront)
- - glb
+ - glb (GLTF binary scene)
 ## Supported texture formats
  - png
  - ireg
