@@ -43,7 +43,6 @@ def vtk_local_origin(meshes):
   bb = np.subtract(bounds0, bounds1)
   tm = np.eye(4)
   tm[0:3, 3] = bb
-  print(tm)
   for mesh in meshes:
     mesh.transform(tm, inplace=True)
   return meshes
